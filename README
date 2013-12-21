@@ -1,1 +1,4 @@
-Hello World
+Quine-McClunskey Algorithm
+================================================
+
+An implementation of QMC Algorithm in C. 
