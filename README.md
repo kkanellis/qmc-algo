@@ -6,11 +6,11 @@ Simple implementation of [Quine–McCluskey algorithm](http://en.wikipedia.org/w
 
 The input format is given in a single string, containing all the minterms of the function we want to minimize. Example:
 
-<pre>	>> 0,2,5,8,9,13,15 </pre>
+	>> 0,2,5,8,9,13,15
 
 The input above is equivalent to the function below:
 
-<pre>	F = Σm(0,2,5,8,9,13,15) </pre>
+	F = Σm(0,2,5,8,9,13,15)
 
 ## TODO
 - Show *prime implicant chart* followed by *essentials* prime implicants
