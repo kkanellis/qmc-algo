@@ -1,5 +1,5 @@
 /**********************************************************************
- *		Quine - McCluskey Algorithm Implementation in C Language 
+ * Quine - McCluskey Algorithm Implementation in C Language 
  **********************************************************************/
 
 #include <stdio.h>
@@ -263,35 +263,59 @@ void CreateNewGroupRepr(char *newGroupRepr, char *firstGroupRepr, char *secondGr
 	}
 	newGroupRepr[cVariables] = '\0';
 }
+
+
+void GetPrimeImplicants( mintermGroupT **table, bool ** termsUsed, 
+                        mintermGroupT * *primeImplicants, int *lenCol, int cColumns){
+    int position = 0;
+    int i,j;
+    
+    /* Iterate the table to add the prime Implicants to the corrensponding array */
+    for( i = 0; i <= cColumns; i++){
+        for( j = 0; j < lenCol[i]; j++){
+            if( !termsUsed[i][j] ){
+                (*primeImplicants)[position] = table[i][j];
+                position++;
+            }
+        }
+    }
+}  
 /** *******************************************************************/
 
 
 int main(int argc, char *argv[]){
 	mintermGroupT *table[VARIABLES_MAX + 1]; /* Array of columns */
+    mintermGroupT *primeImplicants; 
+    /*mintermGroupT *essentialImplicants;*/
 	bool *termsUsed[VARIABLES_MAX + 1]; /* Boolean 2d array of terms used */
 	
 	int lenCol[VARIABLES_MAX]; /* Lenght of each column */
 	int cVariables; /* Number of Variables */
 	int cMinterms;	/* Number of Minterms */
-	int cColums;	/* Number of Columns */ 
+	int cColumns;	/* Number of Columns */
+    int cPrimeImplicants; /* Number of Prime implicants */
+    /*int cEssentialImplicants;  Number of Essential Prime Implicants */
 	
-	/* Input sring */
+	/* Input string */
 	char exp_minterms[EXPRESSION_MAX_LENGTH];
 	
 	ReadInput( &cMinterms, exp_minterms);
 	table[0] = (mintermGroupT *)malloc( cMinterms * sizeof(mintermGroupT) );
 	lenCol[0] = cMinterms;
+    
+    /* Allocate space and initialize to zero the first column of the boolean table */
+    termsUsed[0] = (bool *)calloc( lenCol[0], sizeof(bool) );
 	
 	ParseInput(exp_minterms, table[0], cMinterms, &cVariables);
 	
 	/* Sort the minterms by the number of ones in their binary represenation */
 	qsort( table[0], cMinterms, sizeof(mintermGroupT) , CompareMinterms );
 	
+    /* Initialize */
+    cPrimeImplicants = 0;
+    
 	int i,j;
-	for( i = 0; i < cVariables; i++){
-		
-		/* Allocate space and initialize to zero for i-th column of the boolean table */
-		termsUsed[i] = (bool *)calloc( lenCol[i], sizeof(bool) );
+	for( i = 0; i <= cVariables; i++){
 		
 		/* Allocate space for the next column of the table */
 		mintermGroupT *nextCol = (mintermGroupT *)malloc( (lenCol[i] * lenCol[i])  * sizeof(mintermGroupT) );
@@ -343,9 +367,12 @@ int main(int argc, char *argv[]){
 		
 		lenCol[i+1] = nextColPos;
 		
-		/* **************************** */
-		/* TODO: Prime implicants chart */
-		/* **************************** */
+        /* Count the terms not used ( prime implicants ) in this column */
+        for( j = 0; j < lenCol[i]; j++){
+            if( !termsUsed[i][j] ){
+                cPrimeImplicants++;
+            }
+        }
 		
 		/* Groups cannot be merged further into larger ones */
 		if( lenCol[i+1] == 0 ){
@@ -357,24 +384,46 @@ int main(int argc, char *argv[]){
 		for( j = 0; j < lenCol[i+1]; j++){
 			table[i+1][j] = nextCol[j];
 		}
+        
+        /* Allocate space and initialize to zero for i-th column of the boolean table */
+		termsUsed[i+1] = (bool *)calloc( lenCol[i+1], sizeof(bool) );
 		
 		/* De-allocate the memory used in the termporary array  'nextCol' */
 		free(nextCol);
 	}
+    
+	cColumns = i;
+    
+    /* Allocate memory for primeImplicants array and get the prime implicants */ 
+    primeImplicants = (mintermGroupT *)malloc( cPrimeImplicants * sizeof(mintermGroupT) );
+    GetPrimeImplicants( table, termsUsed, &primeImplicants, lenCol, cColumns );
 	
-	cColums = i;
-	
+    /* Allocate memory for essentialImplicants array and get the essentials implicants */ 
+    /*cEssentialImplicants = 0;
+    essentialImplicants = (mintermGroupT *)malloc( cPrimeImplicants * sizeof(mintermGroupT) );
+    GetEssentialImplicants( table*/
+    
+    
 	/* Printing the columns (iterations) */
 	printf("\n\n");
-	for(j = 0; j <= cColums; j++){
+	for(j = 0; j <= cColumns; j++){
 		printf("############### COLUMN %d ###############\n",j);
 		for(i = 0; i < lenCol[j]; i++){
 			printf("[ ");
-			list_print(table[j][i].root);
+			list_print( table[j][i].root );
 			printf("]  %s  %s\n", table[j][i].repr, (termsUsed[j][i] ? "OK" : " *") );
 		}
 		printf("\n\n");
 	}
-	
+    
+    /* Printing the prime implicants */
+    printf("############### PRIME IMPLICANTS ###############\n\n");
+    for(i = 0; i < cPrimeImplicants; i++){
+	    printf("[P%d]: %s  [ ", i, primeImplicants[i].repr);
+        list_print( primeImplicants[i].root );
+        printf(" ]\n");
+    }
+    printf("\n\n");
+    
 	return 0;
 }
