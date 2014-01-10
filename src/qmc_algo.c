@@ -63,6 +63,20 @@ void list_insert(lnodeT *root, unsigned int id){
 	}
 }
 
+lnodeT * list_find(lnodeT *root, unsigned int id){
+	lnodeT * curr = root;
+	
+	while( curr != NULL ){
+		/* If the current node id equals the id we are looking for */
+		if( curr->id == id ){
+			return curr;
+		}
+		curr = curr->next;
+	}
+	
+	return NULL;
+}
+		
 void list_merge(lnodeT **newRoot, lnodeT *firstRoot, lnodeT *secondRoot ){
 	list_init(newRoot, firstRoot->id );
 	
@@ -134,6 +148,28 @@ void StrReverse(char *s){
 		
 		low++;high--;
 	}
+}
+/**********************************************************************/
+
+/***********************************************************************
+ * Compare functions used in Qsort 
+ **********************************************************************/ 
+int CompareMintermsByRepr( const void *a , const void * b){
+	mintermGroupT *first  = (mintermGroupT *)a;
+	mintermGroupT *second = (mintermGroupT *)b;
+	
+	if( first->cPosBits == second->cPosBits ){
+		return strcmp( first->repr, second->repr );
+	}
+	
+	return (first->cPosBits - second->cPosBits);
+}
+
+int CompareMintermsById( const void * a, const void * b){
+	mintermGroupT * first  = (mintermGroupT *)a;
+	mintermGroupT * second = (mintermGroupT *)b;
+	
+	return ( first->root->id - second->root->id);
 }
 /**********************************************************************/
 
@@ -215,23 +251,12 @@ void ParseInput(char *exp, mintermGroupT *mt, int cTerms, int *cVariables){
 		(*cVariables)++;
 	}
 	
-	/* Realloc the repr fields to save some (hopefully enough?) memory */
+	/* Realloc the 'repr' fields to save some (hopefully enough?) memory */
 	for(i = 0; i < cTerms; i++){
 		mt[i].repr = (char *)realloc( mt[i].repr , (*cVariables + 1) * sizeof(char) );
 		mt[i].repr[ *cVariables ] = '\0';
 		StrReverse( mt[i].repr );
 	}
-}
-
-int CompareMinterms( const void *a , const void * b){
-	mintermGroupT *first  = (mintermGroupT *)a;
-	mintermGroupT *second = (mintermGroupT *)b;
-	
-	if( first->cPosBits == second->cPosBits ){
-		return strcmp( first->repr, second->repr );
-	}
-	
-	return (first->cPosBits - second->cPosBits);
 }
 
 bool CanFormGroup(mintermGroupT firstGroup, mintermGroupT secondGroup, int cVariables){
@@ -264,37 +289,88 @@ void CreateNewGroupRepr(char *newGroupRepr, char *firstGroupRepr, char *secondGr
 	newGroupRepr[cVariables] = '\0';
 }
 
-
 void GetPrimeImplicants( mintermGroupT **table, bool ** termsUsed, 
-                        mintermGroupT * *primeImplicants, int *lenCol, int cColumns){
-    int position = 0;
+                        mintermGroupT *primeImplicants, int *lenCol, int cColumns){
+    int index = 0;
     int i,j;
     
     /* Iterate the table to add the prime Implicants to the corrensponding array */
     for( i = 0; i <= cColumns; i++){
         for( j = 0; j < lenCol[i]; j++){
             if( !termsUsed[i][j] ){
-                (*primeImplicants)[position] = table[i][j];
-                position++;
+                primeImplicants[index] = table[i][j];
+                index++;
             }
         }
     }
-}  
+}
+
+void CreatePrimeChart(bool ** primeChart, mintermGroupT* minterms, int cMinterms,
+					mintermGroupT * primeImplicants, int cPrimeImplicants){
+	int i,j, mintermId;
+	lnodeT * curr;
+	for(i = 0; i < cPrimeImplicants; i++){
+		j = 0;
+		
+		curr = primeImplicants[i].root;
+		while(curr != NULL){
+			
+			/* Find the appropriate cell */
+			mintermId = minterms[j].root->id;
+			while( mintermId < (curr->id) ){
+				j++;
+				mintermId = minterms[j].root->id;
+			}
+			
+			/* The i-th primeImplicant covers the j-th minterm */
+			primeChart[i][j] = 1;
+			
+			curr = curr->next;
+		}
+	}
+}
+
+void GetEssentialImplicants(bool ** primeChart, int cPrimeImplicants, int cMinterms, bool * isEssential ){
+	int i,j;
+	int nextEssential;
+	
+	for(j = 0; j < cMinterms; j++){ /* Loop through all columns */
+		nextEssential = -1;
+		for(i = 0; i < cPrimeImplicants; i++){ /* Loop through all Prime Implicants */
+			if( primeChart[i][j] == 1 ){
+				if(nextEssential == -1){
+					nextEssential = i;
+				}
+				else{
+					nextEssential = -1;
+					break;
+				}
+			}
+		}
+		
+		if(nextEssential != -1){
+			isEssential[nextEssential] = 1;
+		}
+	}
+}
 /** *******************************************************************/
 
 
 int main(int argc, char *argv[]){
 	mintermGroupT *table[VARIABLES_MAX + 1]; /* Array of columns */
-    mintermGroupT *primeImplicants; 
-    /*mintermGroupT *essentialImplicants;*/
+    mintermGroupT *primeImplicants;
+    mintermGroupT *minterms; /* Array of minterms sorted by id */
 	bool *termsUsed[VARIABLES_MAX + 1]; /* Boolean 2d array of terms used */
+	bool **primeChart; /* Boolean 2d that holds one at [i,j] if the i-th
+						* prime implicant can cover the j-th minterm */
+	bool *isEssential; /* Boolean 2d that holds one at [i] if the i-th 
+						* prime implicant is essential as well */
 	
 	int lenCol[VARIABLES_MAX]; /* Lenght of each column */
 	int cVariables; /* Number of Variables */
 	int cMinterms;	/* Number of Minterms */
 	int cColumns;	/* Number of Columns */
     int cPrimeImplicants; /* Number of Prime implicants */
-    /*int cEssentialImplicants;  Number of Essential Prime Implicants */
 	
 	/* Input string */
 	char exp_minterms[EXPRESSION_MAX_LENGTH];
@@ -303,20 +379,27 @@ int main(int argc, char *argv[]){
 	table[0] = (mintermGroupT *)malloc( cMinterms * sizeof(mintermGroupT) );
 	lenCol[0] = cMinterms;
     
-    /* Allocate space and initialize to zero the first column of the boolean table */
-    termsUsed[0] = (bool *)calloc( lenCol[0], sizeof(bool) );
+	/* Allocate space for the minterms array */
+    minterms = (mintermGroupT *)malloc( cMinterms * sizeof(mintermGroupT) );
+    
+	ParseInput(exp_minterms, minterms, cMinterms, &cVariables);
 	
-	ParseInput(exp_minterms, table[0], cMinterms, &cVariables);
+	/* Sort the minterns by id */
+	qsort( minterms, cMinterms, sizeof(mintermGroupT), CompareMintermsById );
 	
-	/* Sort the minterms by the number of ones in their binary represenation */
-	qsort( table[0], cMinterms, sizeof(mintermGroupT) , CompareMinterms );
+	/* Copy the contents of minterms to table[0] and sort the table[0]
+	 *  by the number of ones in their binary represenation of the minterms */
+	memcpy( table[0], minterms, lenCol[0] * sizeof(mintermGroupT) );
+	qsort( table[0], cMinterms, sizeof(mintermGroupT), CompareMintermsByRepr );
 	
     /* Initialize */
     cPrimeImplicants = 0;
     
+    /* Allocate space and initialize to zero the first column of the boolean table */
+    termsUsed[0] = (bool *)calloc( lenCol[0], sizeof(bool) );
+    
 	int i,j;
 	for( i = 0; i <= cVariables; i++){
-		
 		/* Allocate space for the next column of the table */
 		mintermGroupT *nextCol = (mintermGroupT *)malloc( (lenCol[i] * lenCol[i])  * sizeof(mintermGroupT) );
 		
@@ -396,13 +479,22 @@ int main(int argc, char *argv[]){
     
     /* Allocate memory for primeImplicants array and get the prime implicants */ 
     primeImplicants = (mintermGroupT *)malloc( cPrimeImplicants * sizeof(mintermGroupT) );
-    GetPrimeImplicants( table, termsUsed, &primeImplicants, lenCol, cColumns );
+    GetPrimeImplicants( table, termsUsed, primeImplicants, lenCol, cColumns );
 	
-    /* Allocate memory for essentialImplicants array and get the essentials implicants */ 
-    /*cEssentialImplicants = 0;
-    essentialImplicants = (mintermGroupT *)malloc( cPrimeImplicants * sizeof(mintermGroupT) );
-    GetEssentialImplicants( table*/
+	/* Allocate memory for primeChart array and create prime implicant chart */
+	primeChart = (bool **)malloc( cPrimeImplicants * sizeof(bool *) );
+    for(i = 0; i < cPrimeImplicants; i++){
+		primeChart[i] = (bool *)calloc( cMinterms, sizeof(bool) );
+	}
+    CreatePrimeChart( primeChart, minterms, cMinterms, primeImplicants, cPrimeImplicants );
     
+    /* Allocate memory for isEssential array and find the essential prime implicants */
+    isEssential = (bool *)calloc( cPrimeImplicants, sizeof(bool) );
+    GetEssentialImplicants( primeChart, cPrimeImplicants, cMinterms, isEssential );
+    
+    /* ***********************************************************************************
+     * PRINTING START HERE
+     * **********************************************************************************/
     
 	/* Printing the columns (iterations) */
 	printf("\n\n");
@@ -422,6 +514,36 @@ int main(int argc, char *argv[]){
 	    printf("[P%d]: %s  [ ", i, primeImplicants[i].repr);
         list_print( primeImplicants[i].root );
         printf(" ]\n");
+    }
+    
+    /* Printing the prime implicants chart */
+    printf("\n\n############### PRIME CHART ###############\n\n");
+    printf("        ");
+    for(j = 0; j < cMinterms; j++){
+		printf("| %2d", minterms[j].root->id );
+	}
+	printf("|\n---------");
+	for(j = 0; j < cMinterms; j++){
+		printf("----");
+	}
+	printf("\n");
+	
+	for(i = 0; i < cPrimeImplicants; i++){
+		printf("[P%2d]:  ", i);
+		for(j = 0; j < cMinterms; j++){
+			printf("|  %c", ( primeChart[i][j] ) ? 'X' : ' ');
+		}
+		printf("|\n");
+	}
+    
+    /* Printing the essential prime implicants */
+    printf("\n\n############### ESSENTIAL PRIME IMPLICANTS ###############\n\n");
+    for(i = 0; i < cPrimeImplicants; i++){
+		if( isEssential[i] ){
+			printf("[P%2d]: %s  [ ", i, primeImplicants[i].repr);
+			list_print( primeImplicants[i].root );
+			printf(" ]\n");
+		}
     }
     printf("\n\n");
     
